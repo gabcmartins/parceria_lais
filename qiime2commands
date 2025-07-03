@@ -28,7 +28,12 @@ qiime metadata tabulate --m-input-file ls --o-visualization taxonomy.qzv
 
 qiime feature-table group   --i-table table.qza   --m-metadata-file metadata.tsv   --m-metadata-column group --p-axis sample  --p-mode sum   --o-grouped-table table-grouped.qza     #grouped table to generate grouped taxa bar plot
 
-qiime taxa barplot   --i-table table-l5-grouped.qza   --i-taxonomy taxonomy.qza   --m-metadata-file metadata.tsv   --o-visualization taxa-barplot-grouped.qzv     #grouṕed taxa barplot 
+qiime taxa barplot   --i-table table-grouped.qza   --i-taxonomy taxonomy.qza   --m-metadata-file new-metadata.tsv   --o-visualization taxa-barplot-grouped.qzv     #grouṕed taxa barplot 
+#new-metadata file should contain: 
+#SampleID       group
+Controle        Controle
+Knockout-IL1a   Knockout-IL1a
+Knockout-IL1aR  Knockout-IL1aR
 
 qiime taxa barplot --i-table table.qza --i-taxonomy taxonomy.qza --m-metadata-file metadata.tsv --o-visualization taxa-bar-plots.qzv
 
