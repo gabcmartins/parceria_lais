@@ -149,3 +149,117 @@ plt.title("Top Differentially Abundant Families\nfrom Bacteroidota, Firmicutes a
 plt.legend(title="Phylum", bbox_to_anchor=(1.05, 1), loc="upper left")
 plt.tight_layout()
 plt.show()
+
+PCoA 
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Carregar PCoA- UNWEIGHTED
+ordination_unweighted = pd.read_csv("/home/gabrielacastilho/exported_unifrac_pcoa/ordination_unweighted.txt", sep="\t", skiprows=9, usecols=[0, 1, 2],
+                         header=None, names=["SampleID", "PC1", "PC2"])
+# Unir pelo ID
+ordination_unweighted = ordination_unweighted.merge(metadata, left_on="SampleID", right_on="sample-id", how="left")
+
+custom_palette = {
+    "Controle": "white",
+    "Knockout-IL1a": "firebrick",
+    "Knockout-IL1aR": "blue"
+}
+
+# Plot
+plt.figure(figsize=(6,6))
+sns.scatterplot(
+    data=ordination_unweighted,
+    x="PC1",
+    y="PC2",
+    hue="group",  # substitua pelo nome real da coluna do grupo
+    palette=custom_palette,
+    s=100,
+    edgecolor="black",
+    linewidth=1,
+)
+plt.axhline(0, color='gray', linestyle='--')
+plt.axvline(0, color='gray', linestyle='--')
+plt.xlabel("PC1 (36,49% variance explained)") #valores obtidos diretamente no documento ordination em Proportion explained
+plt.ylabel("PC2 (16,99% variance explained)")
+plt.title("PCoA - Unweighted UniFrac")
+plt.tight_layout()
+plt.show()
+
+WEIGHTED
+
+ordination_weighted = pd.read_csv("/home/gabrielacastilho/exported_unifrac_pcoa/ordination_weighted.txt", sep="\t", skiprows=9, usecols=[0, 1, 2],
+                         header=None, names=["SampleID", "PC1", "PC2"])
+ordination_weighted.head()
+
+
+# Carregar metadata
+metadata = pd.read_csv("metadata.tsv", sep="\t")
+
+# Unir pelo ID
+ordination_weighted = ordination_weighted.merge(metadata, left_on="SampleID", right_on="sample-id")
+
+custom_palette = {
+    "Controle": "white",
+    "Knockout-IL1a": "firebrick",
+    "Knockout-IL1aR": "blue"
+}
+
+# Plot
+plt.figure(figsize=(6,6))
+sns.scatterplot(
+    data=ordination_weighted,
+    x="PC1",
+    y="PC2",
+    hue="group",  # substitua pelo nome real da coluna do grupo
+    palette=custom_palette,
+    s=100,
+    edgecolor="black",
+    linewidth=1,
+)
+plt.axhline(0, color='gray', linestyle='--')
+plt.axvline(0, color='gray', linestyle='--')
+plt.xlabel("PC1 (41,03% variance explained)") #valores obtidos diretamente no documento ordination em Proportion explained
+plt.ylabel("PC2 (28,96% variance explained)")
+plt.title("PCoA - Weighted UniFrac")
+plt.tight_layout()
+plt.show()
+
+BRAY-CURTIS
+
+ordination_bray_curtis = pd.read_csv("/home/gabrielacastilho/exported_unifrac_pcoa/ordination_bray_curtis.txt", sep="\t", skiprows=9, usecols=[0, 1, 2],
+                         header=None, names=["SampleID", "PC1", "PC2"])
+
+# Unir pelo ID
+ordination_bray_curtis = ordination_bray_curtis.merge(metadata, left_on="SampleID", right_on="sample-id")
+
+custom_palette = {
+    "Controle": "white",
+    "Knockout-IL1a": "firebrick",
+    "Knockout-IL1aR": "blue"
+}
+
+# Plot
+plt.figure(figsize=(6,6))
+sns.scatterplot(
+    data=ordination_bray_curtis,
+    x="PC1",
+    y="PC2",
+    hue="group",  # substitua pelo nome real da coluna do grupo
+    palette=custom_palette,
+    s=100,
+    edgecolor="black",
+    linewidth=1,
+)
+plt.axhline(0, color='gray', linestyle='--')
+plt.axvline(0, color='gray', linestyle='--')
+plt.xlabel("PC1 (44,63% variance explained)") #valores obtidos diretamente no documento ordination em Proportion explained
+plt.ylabel("PC2 (27,44% variance explained)")
+plt.title("PCoA - Bray-Curtis")
+plt.tight_layout()
+plt.show()
+
+
+
