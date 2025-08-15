@@ -24,7 +24,7 @@ qiime diversity alpha-rarefaction --i-table table.qza --i-phylogeny rooted-tree.
 
 qiime feature-classifier classify-sklearn --i-classifier silva-138-99-nb-classifier.qza --i-reads rep-seqs.qza --o-classification taxonomy.qza
 
-qiime metadata tabulate --m-input-file ls --o-visualization taxonomy.qzv
+qiime metadata tabulate --m-input-file taxonomy.qza --o-visualization taxonomy.qzv
 
 qiime feature-table group   --i-table table.qza   --m-metadata-file metadata.tsv   --m-metadata-column group --p-axis sample  --p-mode sum   --o-grouped-table table-grouped.qza     #grouped table to generate grouped taxa bar plot
 
