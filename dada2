@@ -1,289 +1,95 @@
+# DADA2 pipeline for 16S rRNA gene amplicon data
+# V3–V4 region (~470 bp), Illumina paired-end sequencing
+# Samples were already demultiplexed and non-biological nucleotides removed
+# Due to low merging rate, only forward reads were used in downstream analyses
 
-library (dada2)
-library (vegan)
-load ('meu_ambiente_lais.RData')
-path
-mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE)
-dadaFs
-seqtab <- makeSequenceTable(filtFs)
-filtFs
-mergers
+library(dada2)
+
+# Path to FASTQ files
+path <- "/media/Data/gabicas/dados_vanessa/raw_data/fastq"
+list.files(path)
+
+# Organizing forward and reverse files
+fnFs <- sort(list.files(path, pattern = "_1.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern = "_2.fastq.gz", full.names = TRUE))
+sample.names <- sapply(strsplit(basename(fnFs), "_"), `[`, 1)
+
+# Plotting representative quality profiles
+plotQualityProfile(fnFs[1:2])   # forward
+plotQualityProfile(fnFs[6:7])   # forward
+plotQualityProfile(fnRs[1:2])   # reverse
+plotQualityProfile(fnRs[6:7])   # reverse
+
+# Defining filtered files
+filt_path <- file.path(path, "filtered")
+dir.create(filt_path, showWarnings = FALSE)
+
+filtFs <- file.path(filt_path, basename(fnFs))
+filtRs <- file.path(filt_path, basename(fnRs))
+
+# Filtering and trimming
+out <- filterAndTrim(
+  fnFs, filtFs,
+  fnRs, filtRs,
+  truncLen = c(210, 210),  # chosen based on quality profiles (Q > 30)
+  maxN = 0,
+  maxEE = c(2, 5),         # balance between read retention and error control
+  truncQ = 2,
+  rm.phix = TRUE,
+  compress = TRUE,
+  multithread = TRUE
+)
+
+# Error learning and denoising (forward reads only)
+errF <- learnErrors(filtFs, multithread = TRUE)
+dadaFs <- dada(filtFs, err = errF, multithread = TRUE)
+
+# Construct sequence table (forward reads only)
 seqtab <- makeSequenceTable(dadaFs)
-head(dadaFs)
+
+# Inspect ASV length distribution
 table(nchar(getSequences(seqtab)))
-seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
-dim(seqtab.nochim)
-sum(seqtab.nochim)/sum(seqtab) 
+
+# Remove chimeric sequences
+seqtab.nochim <- removeBimeraDenovo(
+  seqtab,
+  method = "consensus",
+  multithread = TRUE,
+  verbose = TRUE
+)
+
+# Proportion of non-chimeric reads
+sum(seqtab.nochim) / sum(seqtab)
+
+# Save ASV table
 write.csv(seqtab.nochim, "seqtab_nochim.csv", quote = FALSE)
+
+# Tracking reads through the pipeline
 getN <- function(x) sum(getUniques(x))
-track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), (rowSums(seqtab.nochim))
-track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), rowSums(seqtab.nochim))
-colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "nonchim")
+
+track <- cbind(
+  out,
+  sapply(dadaFs, getN),
+  rowSums(seqtab.nochim)
+)
+
+colnames(track) <- c("input", "filtered", "denoisedF", "nonchim")
 rownames(track) <- sample.names
-head(track)
-write.csv(track, file="track_table.csv", row.names=TRUE) 
- taxa <- assignTaxonomy(seqtab.nochim, "/media/Data/gabicas/colaboracao_lucas_sayuri/lucas/fastqfiles/filtered/silva_nr_v138_train_set.fa.gz", multithread=TRUE)
- taxa <- assignTaxonomy(seqtab.nochim, "/media/Data/gabicas/colaboracao_lucas_sayuri/sayuri/LUCAS12122023_MaleSamples/filtered_fastqfiles/silva_nr_v138_train_set.fa.gz", multithread=TRUE)
-taxa.print <- taxa 
-rownames(taxa.print) <- NULL # Removing sequence rownames for display only
-head(taxa.print)
+
+write.csv(track, "track_table.csv", row.names = TRUE)
+
+# Taxonomic assignment using SILVA v138
+taxa <- assignTaxonomy(
+  seqtab.nochim,
+  "/path_to_silva_database/silva_nr_v138_train_set.fa.gz",
+  multithread = TRUE
+)
+
 write.csv(taxa, "taxa_table.csv", quote = FALSE)
+
+# Save final objects
 saveRDS(seqtab.nochim, "seqtab_final.rds")
 saveRDS(taxa, "taxa_final.rds")
-library (phyloseq)
-save.image("meu_ambiente_lais.RData")
-rownames(seqtab.nochim)
-samdf <- read.csv("/media/Data/gabicas/resultados_vanessa_gabi/metadata_dada2.tsv", sep="\t", row.names = "sample.id")
-head(samdf)
-rownames (seqtab.nochim) <- sample.names
-all(rownames(samdf) %in% rownames(seqtab.nochim))
-ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
-               tax_table(taxa))
-dna <- Biostrings::DNAStringSet(taxa_names(ps))
-names(dna) <- taxa_names(ps)
-ps <- merge_phyloseq(ps, dna)
-taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
-ps
-sample_sums(ps)
-cutoffs <- c(93000,95000, 97000, 100000)
-sapply(cutoffs, function(x) sum(sample_sums(ps) >= x))
-otu <- as.data.frame(otu_table(ps))
-rarecurve(otu, step = 100)
-head (otu)
-rowSums (otu)
-ps_rare <- rarefy_even_depth(ps, rngseed = 1170,sample.size = 93000, replace = FALSE, verbose = TRUE)
-plot_richness(ps_rare, x="group", measures=c("Shannon", "Simpson"))
-library ("ggplot2")  
-plot_richness(ps_rare, x="group", measures=c("Shannon", "Simpson")) + geom_boxplot()
-rich = estimate_richness(ps_rare)
-rich
-pairwise.wilcox.test(rich$Shannon, sample_data(ps_rare)$group)
-pairwise.wilcox.test(rich$Simpson, sample_data(ps_rare)$group)
-ord.nmds.bray <- ordinate(ps_rare, method="NMDS", distance="bray")
-plot_ordination(ps_rare, ord.nmds.bray, color="group")         
-ord.pcoa.bray <- ordinate(ps_rare, method="PCoA", distance="bray")
-plot_ordination(ps_rare, ord.pcoa.bray, color="group")
-sample_variables(ps_rare)
-plot_ordination(ps_rare, ord.pcoa.bray, type="samples", color="group") + 
-  geom_point(size=3)
-ord.pcoa.bray
-ps_rare
-ord.pcoa.bray <- ordinate(ps_rare, method = "PCoA", distance = "bray")
-plot_ordination(ps_rare, ord.pcoa.bray, color="group")
-library(biomformat)
-biom_obj <- make_biom(data = t(seqtab.nochim))
-write_biom(biom_obj, "asv_table_lais.biom")
-save.image("meu_ambiente_lais.RData")
-q()
-library(phyloseq)
-seqtab.nochim <- readRDS("seqtab_final.rds")
-taxa <- readRDS("taxa_final.rds")
-samdf <- read.csv("metadata_dada2.tsv", sep="\t", row.names = "sample.id")
-samdf
-rownames(seqtab.nochim) 
-rownames(samdf) 
-rownames(seqtab.nochim) <- rownames(samdf)
-ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
-               tax_table(taxa
-))
-nsamples(ps)
-ps_rare <- rarefy_even_depth(ps, rngseed = 1170, sample.size = 93000, replace = FALSE, verbose = TRUE)
-ord.pcoa.bray <- ordinate(ps_rare, method="PCoA", distance="bray")
-library(ggplot2)
-plot_ordination(ps_rare, ord.pcoa.bray, color="group") + 
-  geom_point(size=4) + 
-  theme_bw()
-df_plot <- plot_ordination(ps_rare, ord.pcoa.bray, justifyDF = TRUE)
-df_plot <- as.data.frame(ord.pcoa.bray$vectors[, 1:2])
-colnames(df_plot) <- c("Axis.1", "Axis.2")
-df_plot$group <- as.character(sample_data(ps_rare)$group)
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5) +
-  theme_bw() +
-  labs(title = "PCoA Bray-Curtis (15 Amostras)")
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5) +
-  theme_bw() +
-  labs(title = "PCoA Bray-Curtis (15 Amostras)")
-rm(list = ls())
-seqtab.nochim <- readRDS("seqtab_final.rds")
-samdf <- read.csv("metadata_dada2.tsv", sep="\t", row.names = "sample.id")
-taxa <- readRDS("taxa_final.rds")
-seqtab.nochim <- seqtab.nochim[rownames(samdf), ]
-identical(rownames(seqtab.nochim), rownames(samdf))
-library(phyloseq)
-ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
-               tax_table(taxa))
-ps_rare <- rarefy_even_depth(ps, rngseed = 1170, sample.size = 93000, replace = FALSE)
-ord.pcoa.bray <- ordinate(ps_rare, method="PCoA", distance="bray")
-df_plot <- as.data.frame(ord.pcoa.bray$vectors[, 1:2])
-colnames(df_plot) <- c("Axis.1", "Axis.2")
-df_plot$group <- as.character(sample_data(ps_rare)$group)
-library(ggplot2)
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5) +
-  theme_bw() +
-  labs(title = "PCoA Bray-Curtis - AGORA CORRETO")
-plot_ordination(ps_rare, ord.pcoa.bray, color="group")  
-ord.nmds.bray <- ordinate(ps_rare, method="NMDS", distance="bray")
-df_plot2 <- as.data.frame(ord.nmds.bray$vectors[, 1:2])
-colnames(df_plot) <- c("Axis.1", "Axis.2")
-df_plot$group <- as.character(sample_data(ps_rare)$group)
+save.image("dada2_environment.RData")
 
-ggplot(df_plot2, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5) +
-  theme_bw() +
-  labs(title = "NMDS Bray-Curtis")
-df_plot2 <- as.data.frame(ord.nmds.bray$points[, 1:2])
-colnames(df_plot2) <- c("Axis.1", "Axis.2")
-df_plot2$group <- as.character(sample_data(ps_rare)$group)
-ggplot(df_plot2, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5) +
-  theme_bw() +
-  labs(title = "NMDS Bray-Curtis (15 Amostras)")
-pc1 <- round(variacao[1] * 100, 1)
-variacao <- ord.pcoa.bray$values$Relative_eig
-pc1 <- round(variacao[1] * 100, 1)
-pc2 <- round(variacao[2] * 100, 1)
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5, alpha = 0.8) +
-  theme_bw() +
-  labs(
-    title = "PCoA Bray-Curtis (Alinhado e Corrigido)",
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)")
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, color = group)) +
-  geom_point(size = 5, alpha = 0.8) +
-  theme_bw() + scale_color_manual(values= c("controle" = "black", 
-                                "knockout-IL1a" = "red", 
-                                "knockout-IL1aR" = "blue"
-  labs(
-    title = "PCoA Bray-Curtis",
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)")
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, fill = group)) +
-  # shape=21 permite ter cor de preenchimento (fill) e cor de borda (color)
-  geom_point(size = 5, shape = 21, color = "black", stroke = 1.2) + 
-  theme_bw() +
-  scale_fill_manual(values = c(
-    "controle" = "white", 
-    "knockout-IL1a" = "darkred", 
-    "knockout-IL1aR" = "darkblue"
-  )) +
-  labs(
-    title = "PCoA Bray-Curtis",
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)"),
-    fill = "Group"
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, fill = group)) +
-  geom_point(size = 5, shape = 21, color = "black", stroke = 1.2) + 
-  theme_bw() +
-  scale_fill_manual(
-    values = c(
-      "controle" = "white", 
-      "knockout-IL1a" = "darkred", 
-      "knockout-IL1aR" = "darkblue"
-    ),
-    labels = c(
-      "controle" = "Control",        # Aqui acontece a mágica
-      "knockout-IL1a" = "IL-1a KO",   # Você pode até abreviar se quiser
-      "knockout-IL1aR" = "IL-1aR KO"
-    )
-  ) +
-  labs(
-    title = "PCoA Bray-Curtis",
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)"),
-    fill = "Group"
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, fill = group)) +
-  geom_point(size = 5, shape = 21, color = "black", stroke = 1.0) + 
-  theme_bw() +
-  scale_fill_manual(
-    values = c(
-      "controle" = "white", 
-      "knockout-IL1a" = "darkred", 
-      "knockout-IL1aR" = "darkblue"
-    ),
-    labels = c(
-      "controle" = "Control",        # Aqui acontece a mágica
-      "knockout-IL1a" = "IL-1a KO",   # Você pode até abreviar se quiser
-      "knockout-IL1aR" = "IL-1aR KO"
-    )
-  ) +
-  labs(
-    title = "PCoA Bray-Curtis",
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)"),
-    fill = "Group"
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, fill = group)) +
-  geom_point(size = 5, shape = 21, color = "black", stroke = 1.2) + 
-  theme_bw() +
-  scale_fill_manual(
-    values = c(
-      "controle" = "white", 
-      "knockout-IL1a" = "darkred", 
-      "knockout-IL1aR" = "darkblue"
-    ),
-    # O segredo está no parse(text=...) ou expression()
-    labels = c(
-      "controle" = "Control",
-      "knockout-IL1a" = expression(paste("IL-1", alpha, " KO")),
-      "knockout-IL1aR" = expression(paste("IL-1", alpha, "R KO"))
-    )
-  ) +
-  labs(
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)"),
-    fill = "Group"
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, fill = group)) +
-  geom_point(size = 5, shape = 21, color = "black", stroke = 1.2) + 
-  theme_bw() +
-  scale_fill_manual(
-    values = c(
-      "controle" = "white", 
-      "knockout-IL1a" = "darkred", 
-      "knockout-IL1aR" = "darkblue"
-    ),
-    labels = c(
-      "controle" = "Control",
-      "knockout-IL1a" = expression(paste("IL-1", alpha, " KO")),
-      "knockout-IL1aR" = expression(paste("IL-1", alpha, "R KO"))
-    )
-  ) +
-  labs(
-    title = expression(paste("PCoA Bray-Curtis - Beta Diversity of IL-1", alpha, " Models")),
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)"),
-    fill = "Group"
-  )
-ggplot(df_plot, aes(x = Axis.1, y = Axis.2, fill = group)) +
-  geom_point(size = 5, shape = 21, color = "black", stroke = 0.8) + 
-  theme_bw() +
-  scale_fill_manual(
-    values = c(
-      "controle" = "white", 
-      "knockout-IL1a" = "darkred", 
-      "knockout-IL1aR" = "darkblue"
-    ),
-    labels = c(
-      "controle" = "Control",
-      "knockout-IL1a" = expression(paste("IL-1", alpha, " KO")),
-      "knockout-IL1aR" = expression(paste("IL-1", alpha, "R KO"))
-    )
-  ) +
-  labs(
-    title = expression(paste("PCoA Bray-Curtis - Beta Diversity")),
-    x = paste0("PCoA1 (", pc1, "%)"),
-    y = paste0("PCoA2 (", pc2, "%)"),
-    fill = "Group"
-  )
-q()
+
